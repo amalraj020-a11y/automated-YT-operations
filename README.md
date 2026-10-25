@@ -71,6 +71,10 @@ Google's current [YouTube Data API quota reference](https://developers.google.co
 
 Read `python amala_youtube.py status YYYY-MM-DD`, resolve the failed stage's note, then rerun that stage. Completed earlier outputs are preserved. Groq 429 responses have at most two retries with bounded delay. Do not keep retrying an exhausted free quota; resume later or supply an approved local script.
 
+## Excel and Google Drive reports
+
+Every cloud workflow run exports the topic, narration, title, hook scores, renderer, publication result, and YouTube URL to `reports/latest/amala-operations.xlsx`. GitHub Actions commits that workbook back to this repository. To upload a copy to Drive automatically, configure encrypted repository secrets `GOOGLE_DRIVE_CLIENT_ID`, `GOOGLE_DRIVE_CLIENT_SECRET`, and `GOOGLE_DRIVE_REFRESH_TOKEN`; optionally set `GOOGLE_DRIVE_FOLDER_ID`. The Drive OAuth client must include the `drive.file` scope. Without those secrets, the workbook remains safely available in GitHub and the run records a skipped Drive upload.
+
 ## Cost policy
 
 No payment method, paid plan, trial, credits, or hosted resource was activated by this project. Local electricity and internet costs still exist. Verify the actual Groq account is on its Free plan and its current limits before setting `GROQ_API_KEY`. See the [official Groq Free limits](https://console.groq.com/docs/rate-limits), [OpenClaw Groq setup](https://docs.openclaw.ai/providers/groq), and [Sheets API limits](https://developers.google.com/workspace/sheets/api/limits).

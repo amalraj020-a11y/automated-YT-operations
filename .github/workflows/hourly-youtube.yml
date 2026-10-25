@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write
   actions: read
 
 jobs:
@@ -35,6 +35,10 @@ jobs:
       YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
       YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
       YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+      GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
+      GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
+      GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
+      GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -64,6 +68,26 @@ jobs:
             python scripts/hourly_cloud.py --publish
           else
             python scripts/hourly_cloud.py
+          fi
+      - name: Export Excel report
+        if: always()
+        run: python scripts/export_operations_report.py --output hourly-output --workbook reports/latest/amala-operations.xlsx
+      - name: Upload Excel report to Google Drive
+        if: always()
+        env:
+          AMALA_WORKBOOK: reports/latest/amala-operations.xlsx
+          AMALA_DRIVE_STATUS: reports/latest/drive-upload.json
+        run: python scripts/upload_drive_report.py
+      - name: Commit Excel report to GitHub
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f reports/latest/amala-operations.xlsx ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add reports/latest/amala-operations.xlsx reports/latest/drive-upload.json
+            git diff --cached --quiet || git commit -m "Update Amala operations report [skip ci]"
+            git push
           fi
       - name: Save evidence
         if: always()

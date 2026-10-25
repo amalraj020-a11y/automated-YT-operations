@@ -42,6 +42,22 @@ class HourlyCloudTest(unittest.TestCase):
             self.assertIs(hourly.generate_valid_content("topic"), valid)
         self.assertEqual(mocked.call_count, 2)
 
+    def test_free_youtube_agent_tools_rank_hook_and_title(self):
+        fixture = Path(__file__).parent / "fixtures" / "hourly-content.json"
+        content = __import__("json").loads(fixture.read_text(encoding="utf-8"))
+        content["hook_options"] = [
+            "Welcome to this amazing video",
+            "How can you inspect your files safely before changing anything?",
+        ]
+        content["title_options"] = [
+            "Amazing Ultimate Python Secret",
+            "3 Safe Python Steps for Your Files",
+        ]
+        optimized = hourly.optimize_packaging(content)
+        self.assertIn("packaging", optimized)
+        self.assertTrue(optimized["narration"].startswith(optimized["packaging"]["hook"]["hook"]))
+        self.assertEqual(optimized["title"], optimized["packaging"]["title"]["title"])
+
     def test_safe_non_destructive_wording_is_accepted(self):
         content = {
             "title": "Preview files safely",

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -20,6 +21,7 @@ from urllib.error import HTTPError
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
+YOUTUBE_AGENT_ROOT = ROOT / "third_party" / "youtube-agent-skill"
 MODEL = os.environ.get("GROQ_MODEL", "qwen/qwen3.8-27b")
 TOPICS = [
     "find files changed today with Python",
@@ -60,16 +62,18 @@ def groq_json(topic: str) -> dict:
     if not key:
         raise RuntimeError("GROQ_API_KEY is missing")
     prompt = f"""Create one original 35-50 second faceless YouTube Short about: {topic}.
-Return JSON only with keys title, narration, description, hashtags, scenes, code_lines.
+Return JSON only with keys title, title_options, hook_options, narration, description, hashtags, scenes, code_lines.
 Rules: title <= 70 characters; narration 80-105 words (count carefully and never exceed 105); exactly 5 scenes; each scene <= 7 words;
 code_lines is an array of 2-5 short Python lines that match the lesson and never delete or modify files;
+title_options is exactly 5 accurate titles under 60 characters; hook_options is exactly 5 factual opening lines of 9-24 words;
+each hook must confirm the title, create curiosity, avoid invented numbers, and avoid clickbait; the narration must begin with one hook option;
 hashtags is an array of 4 useful tags; teach a safe Python technique; never claim guaranteed results;
 never delete or modify user files; no copied quotes, music, brands, news, or unverifiable statistics.
 The final narration sentence must invite viewers to subscribe for practical Python tips."""
     payload = {
         "model": MODEL,
         "temperature": 0.65,
-        "max_tokens": 900,
+        "max_tokens": 1200,
         "response_format": {"type": "json_object"},
         "messages": [
             {"role": "system", "content": "You write concise, original, factual educational Shorts. Output valid JSON only."},
@@ -127,11 +131,72 @@ def validate_content(content: dict) -> dict:
     return content
 
 
+def _load_vendor_module(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    if not spec or not spec.loader:
+        raise RuntimeError(f"Unable to load vendored module: {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def optimize_packaging(content: dict) -> dict:
+    """Choose stronger hooks and titles with the free MIT YouTube agent tools."""
+    hook_options = [str(item).strip() for item in content.get("hook_options", []) if str(item).strip()]
+    title_options = [str(item).strip() for item in content.get("title_options", []) if str(item).strip()]
+    if not hook_options and not title_options:
+        return content
+    content = dict(content)
+    packaging = {}
+    if hook_options:
+        hookscore = _load_vendor_module(
+            "amala_hookscore", YOUTUBE_AGENT_ROOT / "yt-script" / "hookscore.py"
+        )
+        ranked_hooks = []
+        for hook in hook_options[:10]:
+            parts, verdict, formula, _ = hookscore.score(hook)
+            ranked_hooks.append({"hook": hook, "score": verdict, "formula": formula, "properties": parts})
+        ranked_hooks.sort(key=lambda item: item["score"], reverse=True)
+        winner = ranked_hooks[0]
+        narration = str(content.get("narration", "")).strip()
+        body_parts = re.split(r"(?<=[.!?])\s+", narration, maxsplit=1)
+        body = body_parts[1] if len(body_parts) == 2 else narration
+        hook_text = winner["hook"] if winner["hook"].endswith((".", "!", "?")) else winner["hook"] + "."
+        improved = (hook_text + " " + body).strip()
+        if len(improved.split()) < 70:
+            improved = (hook_text + " " + narration).strip()
+        words = improved.split()
+        if len(words) > 130:
+            improved = " ".join(words[:130]).rstrip(".,;:") + "."
+        content["narration"] = improved
+        packaging["hook"] = winner
+
+    current_title = str(content.get("title", "")).strip()
+    if current_title:
+        title_options.append(current_title)
+    eligible_titles = list(dict.fromkeys(title for title in title_options if len(title) <= 70))
+    if eligible_titles:
+        title_tool = _load_vendor_module(
+            "amala_title_lint", YOUTUBE_AGENT_ROOT / "yt-package" / "title.py"
+        )
+        ranked_titles = [title_tool.check(title) for title in eligible_titles]
+        ranked_titles.sort(key=lambda item: item["score"], reverse=True)
+        content["title"] = ranked_titles[0]["title"]
+        packaging["title"] = {
+            "title": ranked_titles[0]["title"],
+            "score": ranked_titles[0]["score"],
+            "issues": ranked_titles[0]["issues"],
+        }
+    if packaging:
+        content["packaging"] = packaging
+    return content
+
+
 def generate_valid_content(topic: str, attempts: int = 3) -> dict:
     """Regenerate a bounded number of times when an LLM misses hard limits."""
     errors = []
     for _ in range(attempts):
-        content = groq_json(topic)
+        content = optimize_packaging(groq_json(topic))
         try:
             return validate_content(content)
         except ValueError as exc:

@@ -21,6 +21,8 @@ MoneyPrinterTurbo is pinned to its official `mpt` PyPI package. This configurati
 
 The MoneyPrinterTurbo template uses animated pan/zoom, shuffled transitions, word-by-word captions with spring motion, five color themes, progress indicators, and topic-specific code panels. These features keep the video dynamic while preserving the zero-cost local-material setup.
 
+The pipeline also vendors the MIT-licensed hook scorer and title linter from [`Jakeschincariol/youtube-agent-skill`](https://github.com/Jakeschincariol/youtube-agent-skill). Groq proposes multiple factual hooks and titles; the local tools rank them before rendering and save the selected scores in `content.json`. This adds no API key, subscription, or Claude dependency.
+
 A reviewed generation-only artifact can be published unchanged by manually running the workflow with `publish=true` and its `artifact_run_id`. The workflow downloads that exact MP4 and metadata, validates both, and uploads without regenerating the video.
 
 Four GitHub Actions secrets are required before scheduled runs can succeed: `GROQ_API_KEY`, `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, and `YOUTUBE_REFRESH_TOKEN`. The Google OAuth token must belong to the intended Amala channel and include the `youtube.upload` scope. Never commit these values. The workflow marks the upload as containing synthetic media, sets made-for-kids to false, suppresses subscriber notification for hourly frequency, and saves generation evidence for three days.

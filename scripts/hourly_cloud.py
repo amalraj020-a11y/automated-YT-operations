@@ -8,6 +8,7 @@ import json
 import os
 import re
 import shutil
+import shlex
 import subprocess
 import sys
 import textwrap
@@ -23,6 +24,7 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = Path(__file__).resolve().parents[1]
 YOUTUBE_AGENT_ROOT = ROOT / "third_party" / "youtube-agent-skill"
 MODEL = os.environ.get("GROQ_MODEL", "qwen/qwen3.8-27b")
+STYLE_PROFILE = os.environ.get("VIDEO_STYLE", "openmontage-professional")
 TOPICS = [
     "find files changed today with Python",
     "rename many files safely with Python",
@@ -61,15 +63,15 @@ def groq_json(topic: str) -> dict:
     key = os.environ.get("GROQ_API_KEY")
     if not key:
         raise RuntimeError("GROQ_API_KEY is missing")
-    prompt = f"""Create one original 35-50 second faceless YouTube Short about: {topic}.
-Return JSON only with keys title, title_options, hook_options, narration, description, hashtags, scenes, code_lines.
-Rules: title <= 70 characters; narration 80-105 words (count carefully and never exceed 105); exactly 5 scenes; each scene <= 7 words;
+    prompt = f"""Create one original 35-50 second faceless YouTube Short for the recurring series 'Python in 45 Seconds' about: {topic}.
+Return JSON only with keys title, title_options, hook_options, narration, description, hashtags, scenes, code_lines, audience, payoff.
+Rules: title <= 70 characters; narration 80-105 words (count carefully and never exceed 105); exactly 5 scenes in this order: hook, problem, demo, result, CTA; each scene <= 7 words;
 code_lines is an array of 2-5 short Python lines that match the lesson and never delete or modify files;
 title_options is exactly 5 accurate titles under 60 characters; hook_options is exactly 5 factual opening lines of 9-24 words;
 each hook must confirm the title, create curiosity, avoid invented numbers, and avoid clickbait; the narration must begin with one hook option;
 hashtags is an array of 4 useful tags; teach a safe Python technique; never claim guaranteed results;
 never delete or modify user files; no copied quotes, music, brands, news, or unverifiable statistics.
-The final narration sentence must invite viewers to subscribe for practical Python tips."""
+The final narration sentence must invite viewers to subscribe and comment their next practical Python task. Audience must name a specific beginner group and payoff must state the concrete result viewers get."""
     payload = {
         "model": MODEL,
         "temperature": 0.65,
@@ -198,6 +200,8 @@ def generate_valid_content(topic: str, attempts: int = 3) -> dict:
     for _ in range(attempts):
         content = optimize_packaging(groq_json(topic))
         try:
+            content.setdefault("series_name", "Python in 45 Seconds")
+            content.setdefault("style_profile", STYLE_PROFILE)
             return validate_content(content)
         except ValueError as exc:
             errors.append(str(exc))
@@ -209,6 +213,19 @@ def font(size: int):
         if Path(candidate).exists():
             return ImageFont.truetype(candidate, size)
     return ImageFont.load_default()
+
+
+def draw_mascot(draw: ImageDraw.ImageDraw, x: int, y: int, scale: int = 1):
+    """Draw a consistent Amala mascot using local vector shapes only."""
+    s = scale
+    draw.ellipse((x, y, x + 150*s, y + 150*s), fill="#071426", outline="#36d1ff", width=5*s)
+    draw.ellipse((x + 28*s, y + 42*s, x + 58*s, y + 72*s), fill="#f4fbff")
+    draw.ellipse((x + 92*s, y + 42*s, x + 122*s, y + 72*s), fill="#f4fbff")
+    draw.ellipse((x + 39*s, y + 52*s, x + 51*s, y + 64*s), fill="#36d1ff")
+    draw.ellipse((x + 103*s, y + 52*s, x + 115*s, y + 64*s), fill="#36d1ff")
+    draw.arc((x + 47*s, y + 74*s, x + 105*s, y + 118*s), 15, 165, fill="#ff7bc8", width=5*s)
+    draw.polygon([(x + 38*s, y + 7*s), (x + 62*s, y - 30*s), (x + 74*s, y + 12*s)], fill="#ff7bc8")
+    draw.polygon([(x + 78*s, y + 12*s), (x + 112*s, y - 28*s), (x + 116*s, y + 27*s)], fill="#ff7bc8")
 
 
 def render_cards(content: dict, out: Path) -> list[Path]:
@@ -232,14 +249,15 @@ def render_cards(content: dict, out: Path) -> list[Path]:
             draw.line((0, stripe, 1080, stripe + 240), fill="#26384a", width=2)
         draw.rounded_rectangle((58, 86, 1022, 1795), 58, fill=panel, outline=accent, width=7)
         draw.rounded_rectangle((96, 145, 984, 245), 28, fill=background)
-        draw.text((125, 171), "AMALA  •  PYTHON SHORTS", font=font(38), fill=accent)
+        draw.text((125, 171), "AMALA  •  PYTHON IN 45 SECONDS", font=font(31), fill=accent)
         draw.ellipse((865, 159, 925, 219), outline=accent, width=8)
         draw.line((895, 173, 895, 205), fill=accent, width=7)
         draw.line((881, 189, 909, 189), fill=accent, width=7)
 
         # A large animated focal badge gives every scene a distinct visual anchor.
         draw.rounded_rectangle((130, 330, 950, 570), 48, fill=background, outline=accent, width=5)
-        draw.text((180, 365), f"STEP  {number}", font=font(45), fill=accent)
+        labels = ("HOOK", "PROBLEM", "DEMO", "RESULT", "CTA")
+        draw.text((180, 365), labels[number - 1], font=font(45), fill=accent)
         draw.rectangle((180, 465, 180 + number * 125, 495), fill=accent)
         draw.rectangle((180 + number * 125, 465, 805, 495), fill="#5b6f88")
         wrapped = textwrap.wrap(str(text), width=17)[:5]
@@ -260,9 +278,12 @@ def render_cards(content: dict, out: Path) -> list[Path]:
             draw.rounded_rectangle((180, 1110, 900, 1390), 44, fill=background, outline=accent, width=4)
             draw.text((265, 1190), "{  SAFE CODE  }", font=font(48), fill=accent)
 
+        draw_mascot(draw, 790, 1435)
+
         draw.text((115, 1660), f"{number}/5", font=font(42), fill=accent)
         draw.text((760, 1660), "@Amala", font=font(42), fill="white")
-        draw.text((115, 1725), "SAVE  •  TRY  •  SUBSCRIBE", font=font(32), fill="#d3deea")
+        footer = "COMMENT YOUR TASK  •  SUBSCRIBE" if number == 5 else "SAVE  •  TRY  •  FOLLOW THE SERIES"
+        draw.text((115, 1725), footer, font=font(28), fill="#d3deea")
         path = out / f"scene-{number:02}.png"
         image.save(path)
         cards.append(path)
@@ -344,10 +365,51 @@ def make_moneyprinter_video(content: dict, out: Path) -> Path:
         raise RuntimeError("MoneyPrinterTurbo returned a missing or empty video")
     video = out / "amala-short.mp4"
     shutil.copy2(source, video)
+    apply_omnivoice_audio(content, out, video)
     (out / "moneyprinter-result.json").write_text(
         json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
     return video
+
+
+def apply_omnivoice_audio(content: dict, out: Path, video: Path) -> bool:
+    """Replace MoneyPrinter narration when OmniVoice is installed and enabled."""
+    if os.environ.get("OMNIVOICE_ENABLED", "false").lower() not in {"1", "true", "yes"}:
+        return False
+    wav = out / "omnivoice.wav"
+    try:
+        command = os.environ.get("OMNIVOICE_COMMAND")
+        if command:
+            run(*shlex.split(command), "--text", str(content["narration"]), "--output", str(wav), cwd=out)
+        else:
+            import soundfile as sf
+            import torch
+            from omnivoice import OmniVoice
+            device = os.environ.get("OMNIVOICE_DEVICE", "cpu")
+            model = OmniVoice.from_pretrained(
+                os.environ.get("OMNIVOICE_MODEL", "k2-fsa/OmniVoice"),
+                device_map=device,
+                dtype=torch.float32 if device == "cpu" else torch.float16,
+            )
+            kwargs = {}
+            reference = os.environ.get("OMNIVOICE_REFERENCE_AUDIO")
+            if reference:
+                kwargs["ref_audio"] = reference
+                if os.environ.get("OMNIVOICE_REFERENCE_TEXT"):
+                    kwargs["ref_text"] = os.environ["OMNIVOICE_REFERENCE_TEXT"]
+            audio = model.generate(text=str(content["narration"]), **kwargs)
+            sf.write(str(wav), audio[0], 24000)
+        if not wav.is_file() or wav.stat().st_size == 0:
+            raise RuntimeError("OmniVoice did not create a WAV file")
+        replaced = out / "amala-short-omnivoice.mp4"
+        run("ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(video), "-i", str(wav),
+            "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", "-shortest", str(replaced))
+        shutil.copy2(replaced, video)
+        (out / "voice-engine.json").write_text(json.dumps({"engine": "omnivoice", "status": "used"}, indent=2) + "\n", encoding="utf-8")
+        return True
+    except Exception as exc:
+        (out / "voice-engine.json").write_text(json.dumps({"engine": "omnivoice", "status": "fallback", "error": f"{type(exc).__name__}: {exc}"}, indent=2) + "\n", encoding="utf-8")
+        return False
 
 
 def make_video(content: dict, out: Path, voice_file: Path | None = None, renderer: str = "simple") -> tuple[Path, str]:

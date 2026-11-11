@@ -75,6 +75,10 @@ Read `python amala_youtube.py status YYYY-MM-DD`, resolve the failed stage's not
 
 Every cloud workflow run exports the topic, narration, title, hook scores, renderer, publication result, and YouTube URL to `reports/latest/amala-operations.xlsx`. GitHub Actions commits that workbook back to this repository. To upload a copy to Drive automatically, configure encrypted repository secrets `GOOGLE_DRIVE_CLIENT_ID`, `GOOGLE_DRIVE_CLIENT_SECRET`, and `GOOGLE_DRIVE_REFRESH_TOKEN`; optionally set `GOOGLE_DRIVE_FOLDER_ID`. The Drive OAuth client must include the `drive.file` scope. Without those secrets, the workbook remains safely available in GitHub and the run records a skipped Drive upload.
 
+## Professional video profile and optional OmniVoice
+
+The cloud renderer now uses an `openmontage-professional` style profile: a five-beat narrative (HOOK, PROBLEM, DEMO, RESULT, CTA), branded local mascot artwork, readable code panels, animated subtitles, and a consistent recurring series name. MoneyPrinterTurbo remains the renderer. OmniVoice can replace only the narration audio when installed on a CPU/GPU worker by setting `OMNIVOICE_ENABLED=true`; it uses the official Python API or an `OMNIVOICE_COMMAND` adapter and automatically falls back to the normal free voice if generation fails. The GitHub-hosted runner keeps OmniVoice disabled because its model download and CPU runtime are not appropriate for every scheduled run. OpenMontage is used as a style/pacing reference rather than copied into the runner, avoiding a duplicate heavy production stack and preserving its AGPL boundary.
+
 ## Cost policy
 
 No payment method, paid plan, trial, credits, or hosted resource was activated by this project. Local electricity and internet costs still exist. Verify the actual Groq account is on its Free plan and its current limits before setting `GROQ_API_KEY`. See the [official Groq Free limits](https://console.groq.com/docs/rate-limits), [OpenClaw Groq setup](https://docs.openclaw.ai/providers/groq), and [Sheets API limits](https://developers.google.com/workspace/sheets/api/limits).

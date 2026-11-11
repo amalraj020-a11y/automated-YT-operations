@@ -75,7 +75,8 @@ The final narration sentence must invite viewers to subscribe and comment their 
     payload = {
         "model": MODEL,
         "temperature": 0.65,
-        "max_tokens": 1200,
+        # Stay below Groq's current 1,000 output-tokens-per-minute free limit.
+        "max_tokens": 900,
         "response_format": {"type": "json_object"},
         "messages": [
             {"role": "system", "content": "You write concise, original, factual educational Shorts. Output valid JSON only."},

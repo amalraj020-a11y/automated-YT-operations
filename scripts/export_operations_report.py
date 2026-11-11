@@ -19,10 +19,8 @@ def _find(root: Path, name: str) -> Path | None:
 def build_report(output_root: Path, workbook_path: Path) -> Path:
     result_path = _find(output_root, "result.json")
     content_path = _find(output_root, "content.json")
-    if not result_path or not content_path:
-        raise FileNotFoundError("Run output must contain result.json and content.json")
-    result = json.loads(result_path.read_text(encoding="utf-8"))
-    content = json.loads(content_path.read_text(encoding="utf-8"))
+    result = json.loads(result_path.read_text(encoding="utf-8")) if result_path else {}
+    content = json.loads(content_path.read_text(encoding="utf-8")) if content_path else {}
     packaging = content.get("packaging", {})
     hook = packaging.get("hook", {})
     title = packaging.get("title", {})
@@ -32,6 +30,7 @@ def build_report(output_root: Path, workbook_path: Path) -> Path:
     summary.title = "Run Summary"
     rows = [
         ("Generated (UTC)", datetime.now(timezone.utc).isoformat()),
+        ("Report status", "complete" if result_path and content_path else "generation failed before evidence was written"),
         ("GitHub run", os.environ.get("GITHUB_RUN_ID", "")),
         ("Slot", result.get("slot", "")),
         ("Model", result.get("model", "")),

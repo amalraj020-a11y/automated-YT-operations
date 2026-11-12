@@ -88,6 +88,12 @@ class HourlyCloudTest(unittest.TestCase):
         task_result = payload.get("result", payload)
         self.assertEqual(task_result["videos"], ["final.mp4"])
 
+    def test_art_style_selection_is_free_and_deterministic(self):
+        with patch.dict(os.environ, {"AMALA_ART_STYLE": "pixel"}):
+            self.assertEqual(hourly.choose_art_style(Path("2026-11-12T08")), "pixel")
+        with patch.dict(os.environ, {"AMALA_ART_STYLE": "auto"}):
+            self.assertEqual(hourly.choose_art_style(Path("2026-11-12T08")), hourly.choose_art_style(Path("2026-11-12T08")))
+
 
 if __name__ == "__main__":
     unittest.main()

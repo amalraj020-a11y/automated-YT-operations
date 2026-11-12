@@ -19,7 +19,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 ROOT = Path(__file__).resolve().parents[1]
 YOUTUBE_AGENT_ROOT = ROOT / "third_party" / "youtube-agent-skill"
@@ -229,8 +229,20 @@ def draw_mascot(draw: ImageDraw.ImageDraw, x: int, y: int, scale: int = 1):
     draw.polygon([(x + 78*s, y + 12*s), (x + 112*s, y - 28*s), (x + 116*s, y + 27*s)], fill="#ff7bc8")
 
 
+ART_STYLES = ("pixel", "chalkboard", "glow", "ps2")
+
+
+def choose_art_style(out: Path) -> str:
+    requested = os.environ.get("AMALA_ART_STYLE", "auto").strip().lower()
+    if requested in ART_STYLES:
+        return requested
+    return ART_STYLES[int(hashlib.sha256(out.name.encode()).hexdigest()[:8], 16) % len(ART_STYLES)]
+
+
 def render_cards(content: dict, out: Path) -> list[Path]:
     cards = []
+    style = choose_art_style(out)
+    content["visual_style"] = style
     palettes = [
         ("#071426", "#0d3152", "#36d1ff"),
         ("#180b2d", "#43206b", "#d56bff"),
@@ -238,6 +250,12 @@ def render_cards(content: dict, out: Path) -> list[Path]:
         ("#291207", "#663516", "#ffad42"),
         ("#11152e", "#293f79", "#79a7ff"),
     ]
+    if style == "chalkboard":
+        palettes = [("#17251f", "#263c31", "#f5e9b7")] * 5
+    elif style == "glow":
+        palettes = [("#080b1d", "#111b45", "#6cf6ff"), ("#190a27", "#351052", "#ff66d4")] * 3
+    elif style == "ps2":
+        palettes = [("#17202a", "#394958", "#f4c27a"), ("#251b2b", "#55405a", "#d49aff")] * 3
     code_lines = [str(line)[:42] for line in content.get("code_lines", [])][:5]
     for number, text in enumerate(content["scenes"], 1):
         background, panel, accent = palettes[number - 1]
@@ -247,7 +265,8 @@ def render_cards(content: dict, out: Path) -> list[Path]:
         draw.ellipse((-180, -120, 520, 580), fill=panel)
         draw.ellipse((700, 1370, 1280, 2020), fill=panel)
         for stripe in range(0, 1920, 64):
-            draw.line((0, stripe, 1080, stripe + 240), fill="#26384a", width=2)
+            line_color = "#60705f" if style == "chalkboard" else "#26384a"
+            draw.line((0, stripe, 1080, stripe + 240), fill=line_color, width=2)
         draw.rounded_rectangle((58, 86, 1022, 1795), 58, fill=panel, outline=accent, width=7)
         draw.rounded_rectangle((96, 145, 984, 245), 28, fill=background)
         draw.text((125, 171), "AMALA  •  PYTHON IN 45 SECONDS", font=font(31), fill=accent)
@@ -285,6 +304,21 @@ def render_cards(content: dict, out: Path) -> list[Path]:
         draw.text((760, 1660), "@Amala", font=font(42), fill="white")
         footer = "COMMENT YOUR TASK  •  SUBSCRIBE" if number == 5 else "SAVE  •  TRY  •  FOLLOW THE SERIES"
         draw.text((115, 1725), footer, font=font(28), fill="#d3deea")
+        if style == "chalkboard":
+            for x in range(120, 980, 48):
+                draw.line((x, 1620, x + 20, 1630), fill="#d7cfa4", width=2)
+        elif style == "glow":
+            glow = Image.new("RGBA", image.size, (0, 0, 0, 0))
+            glow_draw = ImageDraw.Draw(glow)
+            glow_draw.ellipse((40, 40, 1040, 1040), outline=accent, width=18)
+            glow = glow.filter(ImageFilter.GaussianBlur(24))
+            image = Image.alpha_composite(image.convert("RGBA"), glow).convert("RGB")
+        elif style == "ps2":
+            draw = ImageDraw.Draw(image)
+            for y_scan in range(0, 1920, 8):
+                draw.line((0, y_scan, 1080, y_scan), fill="#101820", width=1)
+        if style == "pixel":
+            image = image.resize((270, 480), Image.Resampling.NEAREST).resize((1080, 1920), Image.Resampling.NEAREST)
         path = out / f"scene-{number:02}.png"
         image.save(path)
         cards.append(path)
@@ -501,8 +535,8 @@ def main() -> int:
         validate_content(content)
     else:
         content = generate_valid_content(topic_for(slot))
-    (out / "content.json").write_text(json.dumps(content, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     video, renderer = make_video(content, out, args.voice_file, args.renderer)
+    (out / "content.json").write_text(json.dumps(content, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     result = {"slot": slot, "model": MODEL, "renderer": renderer, "video": str(video), "published": False}
     if args.publish:
         result.update(published=True, url=upload(video, content))

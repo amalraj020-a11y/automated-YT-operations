@@ -79,6 +79,8 @@ Every cloud workflow run exports the topic, narration, title, hook scores, rende
 
 The cloud renderer now uses an `openmontage-professional` style profile: a five-beat narrative (HOOK, PROBLEM, DEMO, RESULT, CTA), branded local mascot artwork, readable code panels, animated subtitles, and a consistent recurring series name. MoneyPrinterTurbo remains the renderer. OmniVoice can replace only the narration audio when installed on a CPU/GPU worker by setting `OMNIVOICE_ENABLED=true`; it uses the official Python API or an `OMNIVOICE_COMMAND` adapter and automatically falls back to the normal free voice if generation fails. The GitHub-hosted runner keeps OmniVoice disabled because its model download and CPU runtime are not appropriate for every scheduled run. OpenMontage is used as a style/pacing reference rather than copied into the runner, avoiding a duplicate heavy production stack and preserving its AGPL boundary.
 
+The visual mode `AMALA_ART_STYLE=auto` now rotates four original local treatments: `pixel`, `chalkboard`, `glow`, and `ps2`. Set one explicitly for a controlled series; no external image-generation API is required.
+
 ## Cost policy
 
 No payment method, paid plan, trial, credits, or hosted resource was activated by this project. Local electricity and internet costs still exist. Verify the actual Groq account is on its Free plan and its current limits before setting `GROQ_API_KEY`. See the [official Groq Free limits](https://console.groq.com/docs/rate-limits), [OpenClaw Groq setup](https://docs.openclaw.ai/providers/groq), and [Sheets API limits](https://developers.google.com/workspace/sheets/api/limits).

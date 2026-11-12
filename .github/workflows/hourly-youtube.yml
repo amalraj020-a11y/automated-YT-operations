@@ -33,6 +33,7 @@ jobs:
       GROQ_MODEL: qwen/qwen3.8-27b
       VIDEO_RENDERER: moneyprinter
       VIDEO_STYLE: openmontage-professional
+      AMALA_ART_STYLE: auto
       OMNIVOICE_ENABLED: ${{ vars.OMNIVOICE_ENABLED || 'false' }}
       YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
       YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
